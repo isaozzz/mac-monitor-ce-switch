@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 
 final class DisplayManager {
@@ -43,6 +44,39 @@ final class DisplayManager {
 
         for other in others {
             CGConfigureDisplayMirrorOfDisplay(config, other.id, main.id)
+        }
+
+        CGCompleteDisplayConfiguration(config, .permanently)
+    }
+
+    /// ディスプレイの表示名を返す
+    func displayName(_ id: CGDirectDisplayID) -> String {
+        return NSScreen.screens
+            .first { screen in
+                guard let num = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else { return false }
+                return num == id
+            }?
+            .localizedName ?? "Display \(id)"
+    }
+
+    /// 指定ディスプレイを主ディスプレイ（原点）に設定する
+    func setMainDisplay(_ targetID: CGDirectDisplayID) {
+        let displays = onlineDisplays().filter { $0.mirrorOf == kCGNullDirectDisplay }
+        guard displays.contains(where: { $0.id == targetID }) else { return }
+        guard CGDisplayIsMain(targetID) == 0 else { return }
+
+        let targetBounds = CGDisplayBounds(targetID)
+        let shiftX = Int32(-targetBounds.origin.x)
+        let shiftY = Int32(-targetBounds.origin.y)
+
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success else { return }
+
+        for display in displays {
+            let bounds = CGDisplayBounds(display.id)
+            let newX = Int32(bounds.origin.x) + shiftX
+            let newY = Int32(bounds.origin.y) + shiftY
+            CGConfigureDisplayOrigin(config, display.id, newX, newY)
         }
 
         CGCompleteDisplayConfiguration(config, .permanently)

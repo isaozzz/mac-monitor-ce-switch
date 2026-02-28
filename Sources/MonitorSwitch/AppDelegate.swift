@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var extendedItem: NSMenuItem!
     private var mirrorItem: NSMenuItem!
+    private var mainDisplayItem: NSMenuItem!
+    private var mainDisplayMenu: NSMenu!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -38,6 +40,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(mirrorItem)
         menu.addItem(.separator())
 
+        mainDisplayItem = NSMenuItem(title: "主ディスプレイ", action: nil, keyEquivalent: "")
+        mainDisplayMenu = NSMenu()
+        mainDisplayItem.submenu = mainDisplayMenu
+        menu.addItem(mainDisplayItem)
+
+        menu.addItem(.separator())
+
         let quitItem = NSMenuItem(
             title: "終了",
             action: #selector(NSApplication.terminate(_:)),
@@ -61,10 +70,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateCheckmarks()
     }
 
+    @objc private func switchMainDisplay(_ sender: NSMenuItem) {
+        guard let num = sender.representedObject as? NSNumber else { return }
+        let displayID = CGDirectDisplayID(num.uint32Value)
+        displayManager.setMainDisplay(displayID)
+        updateCheckmarks()
+    }
+
     private func updateCheckmarks() {
         let mirroring = displayManager.isMirroring()
         extendedItem.state = mirroring ? .off : .on
         mirrorItem.state = mirroring ? .on : .off
+        updateMainDisplaySubmenu(mirroring: mirroring)
+    }
+
+    private func updateMainDisplaySubmenu(mirroring: Bool) {
+        mainDisplayMenu.removeAllItems()
+        let displays = displayManager.onlineDisplays().filter { $0.mirrorOf == kCGNullDirectDisplay }
+
+        // ミラーリング中 or 1台のみなら非表示
+        mainDisplayItem.isHidden = mirroring || displays.count < 2
+
+        for display in displays {
+            let name = displayManager.displayName(display.id)
+            let item = NSMenuItem(title: name, action: #selector(switchMainDisplay(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: display.id)
+            item.state = display.isMain ? .on : .off
+            mainDisplayMenu.addItem(item)
+        }
     }
 }
 
